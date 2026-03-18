@@ -58,8 +58,8 @@ export class Service {
     }
 
     const responseText = await response.text();
-    const results = Transport.decodeResponse(responseText);
-    const result = results.find(r => r.rpcId === spec.rpcId);
+    const allResults = Transport.decodeResponse(responseText);
+    const result = allResults.find(r => r.rpcId === spec.rpcId);
 
     if (!result) {
       throw new Error(`No result found for rpcId: ${spec.rpcId}`);

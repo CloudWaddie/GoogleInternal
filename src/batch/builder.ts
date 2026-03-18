@@ -74,21 +74,18 @@ export class BatchBuilder {
     const finalResults: any[] = new Array(this.items.length);
     const errors: Record<number, Error> = {};
 
-    const resultsPool = [...allResults];
-
     for (let i = 0; i < this.items.length; i++) {
       const spec = specs[i];
-      const resultIndex = resultsPool.findIndex(r => r.rpcId === spec.rpcId);
+      const result = allResults.find(r => r.index === (i + 1).toString());
       
-      if (resultIndex !== -1) {
-        const result = resultsPool.splice(resultIndex, 1)[0];
+      if (result) {
         try {
           finalResults[i] = spec.mapResult(result.payload);
         } catch (e) {
           errors[i] = e instanceof Error ? e : new Error(String(e));
         }
       } else {
-        errors[i] = new Error(`No result found for item ${i} (rpcId: ${spec.rpcId})`);
+        errors[i] = new Error(`No result found for item ${i} (index: ${i + 1})`);
       }
     }
 

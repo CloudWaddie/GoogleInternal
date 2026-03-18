@@ -20,8 +20,12 @@ describe('Batching', () => {
       mapResult: (payload: any) => payload[1],
     });
 
-    // Mock fetch
-    const json = '[["wrb.fr","rpc1_id","[\\"result1\\"]",null,null,null,null],["wrb.fr","rpc2_id","[null,\\"result2\\"]",null,null,null,null]]';
+    // Mock fetch - now with proper indices at position 6
+    const json = JSON.stringify([
+      ["wrb.fr","rpc1_id","[\"result1\"]",null,null,null,"1"],
+      ["wrb.fr","rpc2_id","[null,\"result2\"]",null,null,null,"2"]
+    ]);
+    
     global.fetch = vi.fn().mockImplementation(() =>
       Promise.resolve({
         ok: true,
@@ -56,8 +60,11 @@ describe('Batching', () => {
       mapResult: (payload: any) => payload[1],
     });
 
-    // Mock fetch - only rpc1_id is returned
-    const json = '[["wrb.fr","rpc1_id","[\\"result1\\"]",null,null,null,null]]';
+    // Mock fetch - only rpc1_id (index "1") is returned
+    const json = JSON.stringify([
+      ["wrb.fr","rpc1_id","[\"result1\"]",null,null,null,"1"]
+    ]);
+
     global.fetch = vi.fn().mockImplementation(() =>
       Promise.resolve({
         ok: true,
@@ -80,7 +87,7 @@ describe('Batching', () => {
       const partialError = error as PartialBatchError;
       expect(partialError.results).toEqual(['result1', undefined]);
       expect(partialError.errors[1]).toBeDefined();
-      expect(partialError.errors[1].message).toContain('rpc2_id');
+      expect(partialError.errors[1].message).toContain('index: 2');
     }
   });
 });

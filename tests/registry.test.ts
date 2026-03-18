@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GoogleInternal } from '../src/index';
-import { Service } from '../src/registry/service';
 
 // Mock fetch
 global.fetch = vi.fn();
@@ -28,8 +27,8 @@ describe('Service & Spec Registry', () => {
 
     newsService.register('search', searchSpec);
 
-    // Mock response
-    const payload = "[[\"wrb.fr\",\"vYbt6d\",\"[\\\"result-data\\\"]\",null,\"generic\"]]";
+    // Mock response with index "1" at position 6
+    const payload = JSON.stringify([["wrb.fr","vYbt6d","[\"result-data\"]",null,null,null,"1"]]);
     const mockResponse = `)]}'\n${payload.length}\n${payload}\n`;
     (global.fetch as any).mockResolvedValue({
       ok: true,
@@ -68,7 +67,7 @@ describe('Service & Spec Registry', () => {
       mapResult: (arr) => arr
     });
 
-    const payload = "[[\"wrb.fr\",\"testRpc\",\"[]\",null,\"generic\"]]";
+    const payload = JSON.stringify([["wrb.fr","testRpc","[]",null,null,null,"1"]]);
     const mockResponse = `)]}'\n${payload.length}\n${payload}\n`;
     (global.fetch as any).mockResolvedValue({
       ok: true,

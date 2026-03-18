@@ -3,7 +3,7 @@
  * The format typically starts with an XSSI protection prefix: )]}'
  * Followed by one or more length-prefixed JSON chunks: [length]\n[JSON]\n
  */
-export function decodeResponse(response: string): { rpcId: string; payload: any }[] {
+export function decodeResponse(response: string): { rpcId: string; payload: any; index: string }[] {
   let content = response;
   
   // Step 2: Strip XSSI prefix
@@ -12,7 +12,7 @@ export function decodeResponse(response: string): { rpcId: string; payload: any 
     content = content.substring(xssiPrefix.length);
   }
 
-  const results: { rpcId: string; payload: any }[] = [];
+  const results: { rpcId: string; payload: any; index: string }[] = [];
 
   // Step 3: Parse length-prefixed chunks
   let offset = 0;
@@ -57,17 +57,18 @@ export function decodeResponse(response: string): { rpcId: string; payload: any 
 /**
  * Recursively extracts wrb.fr envelopes from a JSON structure.
  */
-function extractWrbEnvelopes(data: any, results: { rpcId: string; payload: any }[]) {
+function extractWrbEnvelopes(data: any, results: { rpcId: string; payload: any; index: string }[]) {
   if (!Array.isArray(data)) return;
 
   if (data[0] === 'wrb.fr') {
     const rpcId = data[1];
     const payloadStr = data[2];
+    const index = data[6];
     
-    if (typeof rpcId === 'string' && typeof payloadStr === 'string') {
+    if (typeof rpcId === 'string' && typeof payloadStr === 'string' && typeof index === 'string') {
       try {
         const payload = JSON.parse(payloadStr);
-        results.push({ rpcId, payload });
+        results.push({ rpcId, payload, index });
       } catch (e) {
         // Failed to parse double-encoded payload
       }
