@@ -8,6 +8,13 @@ export interface ServiceConfig {
   at?: string;
   cookies?: string;
   origin?: string;
+  // New options
+  maxRetries?: number;
+  retryDelay?: number; // ms
+  retryMaxDelay?: number; // ms
+  debug?: boolean;
+  debugDumpRequest?: boolean;
+  debugDumpPayload?: boolean;
 }
 
 export interface Spec<TSchema extends z.ZodTypeAny = any, TResult = any> {
