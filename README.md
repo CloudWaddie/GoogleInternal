@@ -9,18 +9,12 @@ A Node.js/TypeScript library designed to simplify interaction with Google's inte
 - **Transport Layer:** Handles XSSI prefix stripping, length-prefixed chunking, and double-JSON encoding.
 - **Batching:** Send multiple RPCs across different services in a single POST request.
 
-## Installation
-
-```bash
-npm install googleinternal
-```
-
 ## Usage
 
 ### 1. Initialize the Client
 
 ```typescript
-import { GoogleInternal } from 'googleinternal';
+import { GoogleInternal } from './src'; // Use from source until published
 
 const client = new GoogleInternal({
   cookies: 'SAPISID=...; HSID=...; SID=...;',
@@ -50,7 +44,7 @@ drive.register('list_files', {
 const { files } = await drive.execute('list_files', { folderId: 'root' });
 ```
 
-## Batch Execution
+### 4. Batch Execution
 
 ```typescript
 const batch = client.newBatch();
@@ -61,17 +55,6 @@ batch.add('other_service', 'other_spec', { data: '...' });
 const [filesResult, otherResult] = await batch.execute();
 ```
 
-## Publishing to npm (Internal)
-
-To publish this library to npm, follow these steps:
-
-1. **Login:** `npm login`
-2. **Build:** `npm run build` (Ensure `dist/` is generated)
-3. **Publish:** `npm publish`
-
-*Note: Ensure the version in `package.json` is incremented for each new release.*
-
 ## License
 
 MIT
-
