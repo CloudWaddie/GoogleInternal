@@ -1,39 +1,36 @@
-/**
- * Recursively unescapes a value, handling double or triple encoded JSON strings.
- * Up to 3 levels of nesting are supported.
- */
-function recursiveUnescape(data: any, depth: number = 3): any {
-  let current = data;
-  for (let i = 0; i < depth; i++) {
-    if (typeof current !== 'string') {
-      return current;
+function recursiveUnescape(data: any, depth = 3): any {
+  if (typeof data !== 'string' || depth <= 0) return data;
+  try {
+    const parsed = JSON.parse(data);
+    // If it's a string that was double-encoded, try again
+    if (typeof parsed === 'string') {
+      return recursiveUnescape(parsed, depth - 1);
     }
-    try {
-      const parsed = JSON.parse(current);
-      // If the result is a string, it might be further encoded.
-      if (typeof parsed === 'string') {
-        current = parsed;
-        continue;
-      }
-      // If it's an object or array, we've successfully decoded it.
-      return parsed;
-    } catch (e) {
-      // Try unescaping by wrapping in quotes, similar to the Go implementation.
-      // This can handle strings that have raw escape sequences.
-      try {
-        const unescaped = JSON.parse('"' + current + '"');
-        if (typeof unescaped === 'string' && unescaped !== current) {
-          current = unescaped;
-          continue;
-        }
-      } catch (e2) {
-        // Ignore unescape failure
-      }
-      // Not valid JSON or couldn't unescape, return what we have
-      return current;
-    }
+    return parsed;
+  } catch {
+    return data;
   }
-  return current;
+}
+
+function extractWrbEnvelopes(data: any, results: { rpcId: string; payload: any; index: string }[]) {
+  if (!Array.isArray(data)) return;
+
+  if (data[0] === 'wrb.fr') {
+    const rpcId = data[1];
+    // Check positions 2, 5, 10 for payload
+    const rawPayload = data[2] ?? data[5] ?? data[10];
+    const index = data[6];
+    
+    if (typeof rpcId === 'string' && typeof index === 'string') {
+      const payload = recursiveUnescape(rawPayload);
+      results.push({ rpcId, payload, index });
+    }
+    return;
+  }
+
+  for (const item of data) {
+    extractWrbEnvelopes(item, results);
+  }
 }
 
 const XSSI_PREFIXES = [")]}'\n\n", ")]}'\n", ")]}''"];
@@ -170,31 +167,3 @@ export class StreamingDecoder {
   }
 }
 
-/**
- * Recursively extracts wrb.fr envelopes from a JSON structure.
- */
-function extractWrbEnvelopes(data: any, results: { rpcId: string; payload: any; index: string }[]) {
-  if (!Array.isArray(data)) return;
-
-  if (data[0] === 'wrb.fr') {
-    const rpcId = data[1];
-    // Check positions 2, 5, and 10 for the raw payload
-    const rawPayload = data[2] ?? data[5] ?? data[10];
-    const index = data[6];
-    
-    if (typeof rpcId === 'string' && typeof index === 'string' && rawPayload !== undefined && rawPayload !== null) {
-      try {
-        const payload = recursiveUnescape(rawPayload);
-        results.push({ rpcId, payload, index });
-      } catch (e) {
-        // Failed to parse payload
-      }
-    }
-    return;
-  }
-
-  // If not a wrb.fr envelope itself, it might contain them
-  for (const item of data) {
-    extractWrbEnvelopes(item, results);
-  }
-}

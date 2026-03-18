@@ -114,4 +114,19 @@ describe('decoder', () => {
       { rpcId: 'rpc1', payload: ['res1'], index: '1' }
     ]);
   });
+
+  it('should handle complex robust scenarios (combined)', () => {
+    // Combine: Different XSSI prefix, nested encoding, and alternative position
+    const xssi = ")]}''"; // A different prefix
+    const tripleEncoded = JSON.stringify(JSON.stringify(JSON.stringify(['combined'])));
+    // Position 10
+    const p = JSON.stringify(['wrb.fr', 'rpc_combined', null, null, null, null, 'c1', null, null, null, tripleEncoded]);
+    const response = `${xssi}${p.length}\n${p}\n`;
+    
+    const result = decodeResponse(response);
+    
+    expect(result).toEqual([
+      { rpcId: 'rpc_combined', payload: ['combined'], index: 'c1' }
+    ]);
+  });
 });
