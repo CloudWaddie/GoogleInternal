@@ -9,6 +9,7 @@ import { QUERY_PARAMS } from '../constants';
 export class Service {
   private specs: Map<string, Spec<any, any>> = new Map();
   public lastChecksums: Map<string, number> = new Map();
+  private reqIdCounter = Math.floor(Math.random() * 9000) + 1000;
 
   constructor(public config: ServiceConfig) {}
 
@@ -20,7 +21,7 @@ export class Service {
     return this.specs.get(name);
   }
 
-  private applyConfigToUrl(url: URL) {
+  private applyConfigToUrl(url: URL, rpcId?: string) {
     if (this.config.hl) url.searchParams.append('hl', this.config.hl);
     if (this.config.bl) url.searchParams.append('bl', this.config.bl);
     if (this.config.f_sid) url.searchParams.append('f.sid', this.config.f_sid);
@@ -37,6 +38,23 @@ export class Service {
     if (this.config.alt) {
       url.searchParams.append(QUERY_PARAMS.ALT[0], this.config.alt);
     }
+    
+    const reqId = String(this.reqIdCounter);
+    url.searchParams.append('_reqid', reqId);
+    this.reqIdCounter += 100000;
+
+    const rt = this.config.responseType || 'chunked';
+    const rtMap = { 'chunked': 'c', 'protobuf': 'b', 'json': '' };
+    const rtValue = rtMap[rt];
+    if (rtValue) {
+      url.searchParams.append('rt', rtValue);
+    }
+
+    if (rpcId) {
+      url.searchParams.append('rpcids', rpcId);
+    }
+    // Added for Gemini/Bard apps
+    url.searchParams.append('source-path', '/');
   }
 
   private processResultData<TResult>(specName: string, data: any): TResult {
@@ -75,7 +93,7 @@ export class Service {
     const body = Transport.encodeBatch([{ rpcId: spec.rpcId, args }]);
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
       ...this.config.headers, // User custom headers (e.g. x-goog-ext-)
     };
 
@@ -91,19 +109,18 @@ export class Service {
       headers['Cookie'] = this.config.cookies;
     }
 
-    const params = new URLSearchParams();
-    params.append('f.req', body);
+    let bodyStr = `f.req=${encodeURIComponent(body)}&`;
     if (this.config.at) {
-      params.append('at', this.config.at);
+      bodyStr += `at=${encodeURIComponent(this.config.at)}&`;
     }
 
     const url = new URL(this.config.baseUrl);
-    this.applyConfigToUrl(url);
+    this.applyConfigToUrl(url, spec.rpcId);
 
     const response = await fetch(url.toString(), {
       method: 'POST',
       headers,
-      body: params.toString(),
+      body: bodyStr,
     });
 
     if (!response.ok) {
@@ -143,7 +160,7 @@ export class Service {
     const body = Transport.encodeBatch([{ rpcId: spec.rpcId, args }]);
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
     };
 
     if (this.config.cookies && this.config.origin) {
@@ -154,19 +171,18 @@ export class Service {
       headers['Cookie'] = this.config.cookies;
     }
 
-    const params = new URLSearchParams();
-    params.append('f.req', body);
+    let bodyStr = `f.req=${encodeURIComponent(body)}&`;
     if (this.config.at) {
-      params.append('at', this.config.at);
+      bodyStr += `at=${encodeURIComponent(this.config.at)}&`;
     }
 
     const url = new URL(this.config.baseUrl);
-    this.applyConfigToUrl(url);
+    this.applyConfigToUrl(url, spec.rpcId);
 
     const response = await fetch(url.toString(), {
       method: 'POST',
       headers,
-      body: params.toString(),
+      body: bodyStr,
     });
 
     if (!response.ok) {

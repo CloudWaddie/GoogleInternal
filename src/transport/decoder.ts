@@ -18,13 +18,12 @@ function extractWrbEnvelopes(data: any, results: { rpcId: string; payload: any; 
 
   if (data[0] === 'wrb.fr') {
     const rpcId = data[1];
-    // Check positions 2, 5, 10 for payload
     const rawPayload = data[2] ?? data[5] ?? data[10];
     const index = data[6];
     
-    if (typeof rpcId === 'string' && typeof index === 'string') {
+    if (typeof rpcId === 'string') {
       const payload = recursiveUnescape(rawPayload);
-      results.push({ rpcId, payload, index });
+      results.push({ rpcId, payload, index: String(index || '') });
     }
     return;
   }
@@ -34,7 +33,7 @@ function extractWrbEnvelopes(data: any, results: { rpcId: string; payload: any; 
   }
 }
 
-const XSSI_PREFIXES = [ "))}'\n\n", "))}'\n", "))}''"];
+const XSSI_PREFIXES = [ ")]}'\n\n", ")]}'\n", ")]}''"];
 
 /**
  * Decodes a batchexecute response.
@@ -42,53 +41,34 @@ const XSSI_PREFIXES = [ "))}'\n\n", "))}'\n", "))}''"];
  * Followed by one or more length-prefixed JSON chunks: [length]\n[JSON]\n
  */
 export function decodeResponse(response: string): { rpcId: string; payload: any; index: string }[] {
-  let content = response;
+  let contentStr = response;
   
-  // Step 1: Strip XSSI prefix
-  for (const prefix of XSSI_PREFIXES) {
-    if (content.startsWith(prefix)) {
-      content = content.substring(prefix.length);
-      break;
-    }
+  // Step 1: Strip XSSI prefix flexibly
+  const xssiMatch = contentStr.match(/^\)\]\}'[\s\n\r]*/);
+  if (xssiMatch) {
+    contentStr = contentStr.substring(xssiMatch[0].length);
   }
 
   const results: { rpcId: string; payload: any; index: string }[] = [];
-
-  // Step 2: Parse length-prefixed chunks
-  let offset = 0;
-  while (offset < content.length) {
-    const nextNewline = content.indexOf('\n', offset);
-    if (nextNewline === -1) break;
-
-    const lengthStr = content.substring(offset, nextNewline).trim();
-    if (lengthStr === "") {
-      offset = nextNewline + 1;
-      continue;
+  
+  // Step 2: Line-based parsing. batchexecute chunks are minified JSON on single lines.
+  const lines = contentStr.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (/^\d+$/.test(line)) {
+      // This is a length line
+      const nextLine = lines[i + 1];
+      if (nextLine) {
+        try {
+          const chunk = JSON.parse(nextLine);
+          extractWrbEnvelopes(chunk, results);
+          i++; // Skip the JSON line
+        } catch (e) {
+          // If next line isn't valid JSON, maybe the length line wasn't actually a length line
+          // or the JSON is split (rare in batchexecute)
+        }
+      }
     }
-    
-    const length = parseInt(lengthStr, 10);
-    if (isNaN(length)) {
-      // If we can't parse a length, we might be at the end or in an unexpected format
-      break;
-    }
-
-    const chunkStart = nextNewline + 1;
-    const chunkEnd = chunkStart + length;
-    
-    // Ensure we don't go out of bounds
-    if (chunkEnd > content.length) break;
-
-    const chunkStr = content.substring(chunkStart, chunkEnd);
-    
-    try {
-      const chunk = JSON.parse(chunkStr);
-      // Step 3: Extract wrb.fr envelopes
-      extractWrbEnvelopes(chunk, results);
-    } catch (e) {
-      // Ignore individual chunk parsing errors
-    }
-
-    offset = chunkEnd;
   }
 
   return results;
@@ -116,60 +96,62 @@ export class StreamingDecoder {
     }
     this.buffer += chunkData;
 
-    // Step 1: Strip XSSI prefix if present at the very beginning
+    // Step 1: Strip XSSI prefix flexibly
     if (!this.hasStrippedXssi) {
-      const match = XSSI_PREFIXES.find(p => this.buffer.startsWith(p));
-      if (match) {
-        this.buffer = this.buffer.substring(match.length);
+      const xssiMatch = this.buffer.match(/^\)\]\}'[\s\n\r]*/);
+      if (xssiMatch) {
+        this.buffer = this.buffer.substring(xssiMatch[0].length);
+        this.hasStrippedXssi = true;
+      } else if (this.buffer.length > 20) {
+        // If we haven't found the prefix in the first 20 chars, assume it's not there or already stripped
         this.hasStrippedXssi = true;
       } else {
-        // Check if the buffer could still be an XSSI prefix
-        const couldBePrefix = XSSI_PREFIXES.some(p => p.startsWith(this.buffer));
-        if (!couldBePrefix) {
-          this.hasStrippedXssi = true;
-        } else {
-          // Wait for more data
-          return [];
-        }
+        return []; // Wait for more data to check prefix
       }
     }
 
     const results: { rpcId: string; payload: any; index: string }[] = [];
 
-    // Step 2: Parse length-prefixed chunks from the buffer
+    // Step 2: Line-based parsing from buffer
     while (true) {
       const nextNewline = this.buffer.indexOf('\n');
       if (nextNewline === -1) break;
 
-      const lengthStr = this.buffer.substring(0, nextNewline).trim();
-      if (lengthStr === "") {
-        this.buffer = this.buffer.substring(nextNewline + 1);
-        continue;
-      }
-
-      const length = parseInt(lengthStr, 10);
-      if (isNaN(length)) {
-        // If we can't parse a length, we might be in a bad state. 
-        break;
-      }
-
-      const chunkStart = nextNewline + 1;
-      const chunkEnd = chunkStart + length;
-
-      // Ensure we have the full chunk in the buffer
-      if (this.buffer.length < chunkEnd) break;
-
-      const chunkStr = this.buffer.substring(chunkStart, chunkEnd);
+      const line = this.buffer.substring(0, nextNewline).trim();
+      const nextNextNewline = this.buffer.indexOf('\n', nextNewline + 1);
       
-      try {
-        const chunk = JSON.parse(chunkStr);
-        extractWrbEnvelopes(chunk, results);
-      } catch (e) {
-        // Ignore individual chunk parsing errors
+      if (nextNextNewline === -1) {
+        // We have one line, but we need the second line for the JSON
+        // Check if the current line is a length
+        if (/^\d+$/.test(line)) {
+           // It's a length, wait for next line
+           break;
+        } else {
+           // It's not a length, skip it
+           this.buffer = this.buffer.substring(nextNewline + 1);
+           continue;
+        }
       }
 
-      // Remove processed chunk from buffer
-      this.buffer = this.buffer.substring(chunkEnd);
+      if (/^\d+$/.test(line)) {
+        const jsonLine = this.buffer.substring(nextNewline + 1, nextNextNewline).trim();
+        if (jsonLine) {
+          try {
+            const chunk = JSON.parse(jsonLine);
+            extractWrbEnvelopes(chunk, results);
+            this.buffer = this.buffer.substring(nextNextNewline + 1);
+          } catch (e) {
+            // Not valid JSON, maybe the length was wrong?
+            // Skip the length line and continue
+            this.buffer = this.buffer.substring(nextNewline + 1);
+          }
+        } else {
+           this.buffer = this.buffer.substring(nextNewline + 1);
+        }
+      } else {
+        // Not a length line, skip it
+        this.buffer = this.buffer.substring(nextNewline + 1);
+      }
     }
 
     return results;

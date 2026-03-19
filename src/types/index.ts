@@ -24,6 +24,9 @@ export interface ServiceConfig {
   errorFormat?: string;  // e.g. $.xgafv
   alt?: string;          // Output format
   
+  // Advanced Parameters
+  responseType?: 'chunked' | 'protobuf' | 'json';
+
   // Advanced Headers
   headers?: Record<string, string>;
   responseEncoding?: 'base64' | 'identity';
