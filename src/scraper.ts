@@ -48,10 +48,10 @@ async function scrapeRpcMappings(targetUrl: string) {
         const res = await fetch(targetUrl, { headers, signal: controller.signal });
         clearTimeout(timeout);
         const html = await res.text();
-        const baseJsMatch = html.match(/<script[^>]+src="([^"]+)"[^>]+id="base-js"/i) || 
-                            html.match(/<script[^>]+id="base-js"[^>]+src="([^"]+)"/i);
+        const baseJsMatch = html.match(/<script[^>]+src="([^"]+)"[^>]+id="base[^"]*"/i) || 
+                            html.match(/<script[^>]+id="base[^"]*"[^>]+src="([^"]+)"/i);
         if (!baseJsMatch) {
-          console.error('[ERROR] No base-js found.');
+          console.error('[ERROR] No base script found.');
           return;
         }
         scriptSrcBase = baseJsMatch[1];
