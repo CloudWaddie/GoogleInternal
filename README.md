@@ -12,6 +12,7 @@ A Node.js/TypeScript library designed to simplify interaction with Google's inte
 - **Transport Layer:** Handles XSSI prefix stripping, length-prefixed chunking, and double-JSON encoding.
 - **Batching:** Send multiple RPCs across different services in a single POST request.
 - **Streaming:** Support for length-prefixed streaming responses.
+- **RPC Scraper:** Automatically extract RPC mappings from any Google application by parsing AST structures.
 
 ## Usage
 
@@ -75,28 +76,28 @@ const driveService = client.service('drive');
 const result = await driveService.execute('list_files', { pageSize: 10 });
 ```
 
-### 4. Batch Execution
+## Scraping RPC Mappings
 
-You can bundle multiple RPC calls into a single HTTP request for efficiency.
+You can automatically extract RPC IDs and their corresponding service methods from any Google application that uses `batchexecute`.
 
-```typescript
-const batch = client.newBatch();
-
-batch.add('drive', 'list_files', { folderId: 'folder_1' });
-batch.add('drive', 'list_files', { folderId: 'folder_2' });
-
-const [result1, result2] = await batch.execute();
+```bash
+npm run scrape-rpc <app-url>
 ```
 
-### 5. Streaming Responses
-
-If the endpoint supports streaming (chunked responses), use the `stream` method.
-
-```typescript
-for await (const chunk of drive.stream('some_streaming_rpc', { id: '123' })) {
-  console.log('Received chunk:', chunk);
-}
+**Example:**
+```bash
+npm run scrape-rpc https://gemini.google.com/app
 ```
+
+The script will:
+1. Fetch the application's base JavaScript.
+2. Dynamically discover and download all registered modules.
+3. Perform a 2-phase AST analysis to identify the RPC registration class and extract all mapping definitions.
+4. Output a sorted `rpc_mappings.txt` file.
+
+## Credits
+
+Special thanks to [bedros-p](https://github.com/bedros-p) for sharing the foundational knowledge on Google's module fetching system and for the core logic used in the RPC registration class discovery.
 
 ## License
 
