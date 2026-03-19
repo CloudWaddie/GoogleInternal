@@ -226,23 +226,6 @@ async function scrapeRpcMappings(targetUrl: string) {
 
     if (multibar) multibar.stop();
 
-    // WKT Discovery Phase
-    const wktRegex = /type\.googleapis\.com\/[a-zA-Z0-9_.]+/g;
-    const wktsFound = new Set<string>();
-
-    for (const content of scriptContents) {
-       const matches = content.match(wktRegex);
-       if (matches) {
-          matches.forEach(m => wktsFound.add(m));
-       }
-    }
-    
-    if (wktsFound.size > 0) {
-       const wktPath = path.join(process.cwd(), 'wkt_types.txt');
-       fs.writeFileSync(wktPath, Array.from(wktsFound).sort().join('\n'));
-       console.log(`\n[DISCOVERY] Found ${wktsFound.size} Well-Known Types (saved to wkt_types.txt)`);
-    }
-
     const outputLines = Array.from(mappings.entries())
       .map(([id, name]) => `${id}: ${name}`)
       .sort();

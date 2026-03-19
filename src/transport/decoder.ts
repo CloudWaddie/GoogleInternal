@@ -1,4 +1,3 @@
-import { defaultRegistry } from './registry';
 
 function recursiveUnescape(data: any, depth = 3): any {
   if (typeof data !== 'string' || depth <= 0) return data;
@@ -24,8 +23,7 @@ function extractWrbEnvelopes(data: any, results: { rpcId: string; payload: any; 
     const index = data[6];
     
     if (typeof rpcId === 'string' && typeof index === 'string') {
-      let payload = recursiveUnescape(rawPayload);
-      payload = defaultRegistry.transform(payload); // Automatically unwrap and parse WKTs
+      const payload = recursiveUnescape(rawPayload);
       results.push({ rpcId, payload, index });
     }
     return;
