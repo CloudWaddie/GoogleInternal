@@ -10,3 +10,7 @@ export const QUERY_PARAMS = {
 };
 
 export const HEADERS = {
+  RESPONSE_ENCODING: "x-response-encoding",
+  GOOG_EXT: "x-goog-ext-",
+  PROTOBUF_TYPE: "x-protobuf-type",
+};
