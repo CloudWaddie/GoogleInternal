@@ -1,13 +1,29 @@
 {
-  "name": "googleinternal",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
+  "name": "@cloudwaddie/googleinternal",
+  "version": "1.2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Node.js/TypeScript library for Google's internal batchexecute RPC protocol: SAPISIDHASH auth, spec registry, batching, streaming, and RPC scraping.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "prepublishOnly": "npm test && npm run build",
     "scrape-rpc": "ts-node src/scraper.ts"
   },
   "keywords": [],
@@ -28,6 +44,7 @@
     "estraverse": "^5.3.0",
     "meriyah": "^7.1.0",
     "recast": "^0.23.11",
+    "undici": "^8.10.0",
     "zod": "^4.3.6"
   }
 }

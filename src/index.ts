@@ -34,3 +34,5 @@ export { BatchBuilder } from './batch/builder';
 export { PartialBatchError } from './errors';
 export { FieldMaskTree } from './utils/field-mask';
 export { calculateChecksum, fnv1a32, stableStringify } from './utils/checksum';
+export { scrapeRpcMappings } from './scraper';
+export type { ScrapeResult, ScrapeProgress } from './scraper';

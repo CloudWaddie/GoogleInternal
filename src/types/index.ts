@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export interface ServiceConfig {
   baseUrl: string;
+  sourcePath?: string;
   hl?: string;
   bl?: string;
   f_sid?: string;

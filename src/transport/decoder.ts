@@ -47,6 +47,8 @@ export function decodeResponse(response: string): { rpcId: string; payload: any;
   const xssiMatch = contentStr.match(/^\)\]\}'[\s\n\r]*/);
   if (xssiMatch) {
     contentStr = contentStr.substring(xssiMatch[0].length);
+    // Legacy prefix variant ")]}''" leaves a stray quote behind
+    if (contentStr.startsWith("'")) contentStr = contentStr.substring(1);
   }
 
   const results: { rpcId: string; payload: any; index: string }[] = [];
@@ -101,6 +103,8 @@ export class StreamingDecoder {
       const xssiMatch = this.buffer.match(/^\)\]\}'[\s\n\r]*/);
       if (xssiMatch) {
         this.buffer = this.buffer.substring(xssiMatch[0].length);
+        // Legacy prefix variant ")]}''" leaves a stray quote behind
+        if (this.buffer.startsWith("'")) this.buffer = this.buffer.substring(1);
         this.hasStrippedXssi = true;
       } else if (this.buffer.length > 20) {
         // If we haven't found the prefix in the first 20 chars, assume it's not there or already stripped

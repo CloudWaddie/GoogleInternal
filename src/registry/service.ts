@@ -54,7 +54,7 @@ export class Service {
       url.searchParams.append('rpcids', rpcId);
     }
     // Added for Gemini/Bard apps
-    url.searchParams.append('source-path', '/');
+    url.searchParams.append('source-path', this.config.sourcePath ?? '/');
   }
 
   private processResultData<TResult>(specName: string, data: any): TResult {
