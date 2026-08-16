@@ -282,31 +282,3 @@ export async function scrapeRpcMappings(
 
   return { mappings, mappingTypes, stats: { chunks: scriptContents.length, rpcClass: rpcClassProp, elapsedMs } };
 }
-
-const isCli = process.argv[1] && /scraper\.(ts|js)$/.test(process.argv[1]);
-if (isCli) {
-  const target = process.argv.find(arg => arg.startsWith('http'));
-  if (!target) {
-    console.error('Usage: npm run scrape-rpc <url>');
-    process.exit(1);
-  }
-
-  scrapeRpcMappings(target).then(({ mappings, mappingTypes }) => {
-    const outputLines = Array.from(mappings.entries())
-      .map(([id, name]) => `${id}: ${name}`)
-      .sort();
-    const outputPath = path.join(process.cwd(), 'rpc_mappings.txt');
-    fs.writeFileSync(outputPath, outputLines.join('\n'));
-
-    // Persist call types too (unary / server_streaming / ...) so the info
-    // survives beyond a single run.
-    const typeLines = Array.from(mappingTypes.entries())
-      .map(([id, type]) => `${id}: ${type}`)
-      .sort();
-    const typePath = path.join(process.cwd(), 'rpc_types.txt');
-    fs.writeFileSync(typePath, typeLines.join('\n'));
-
-    console.log(`Output: ${outputPath}`);
-    console.log(`Call types: ${typePath}`);
-  });
-}

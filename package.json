@@ -17,6 +17,9 @@
   "files": [
     "dist"
   ],
+  "bin": {
+    "scrape-rpc": "dist/cli.js"
+  },
   "engines": {
     "node": ">=18"
   },
@@ -24,7 +27,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "prepublishOnly": "npm test && npm run build",
-    "scrape-rpc": "ts-node src/scraper.ts"
+    "scrape-rpc": "ts-node src/cli.ts"
   },
   "keywords": [],
   "author": "",
