@@ -79,6 +79,8 @@ describe('Service & Spec Registry', () => {
     const fetchCall = (global.fetch as any).mock.calls[0];
     const headers = fetchCall[1].headers;
     expect(headers.Authorization).toBeDefined();
-    expect(headers.Authorization).toMatch(/^SAPISIDHASH \d+_[a-f0-9]+$/);
+    expect(headers.Authorization).toMatch(
+      /^SAPISIDHASH \d+_[a-f0-9]+(_[a-z]+)?( SAPISID1PHASH \d+_[a-f0-9]+(_[a-z]+)?)?( SAPISID3PHASH \d+_[a-f0-9]+(_[a-z]+)?)?$/,
+    );
   });
 });
