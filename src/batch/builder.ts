@@ -40,9 +40,9 @@ export class BatchBuilder {
     };
 
     if (baseConfig.cookies && baseConfig.origin) {
-      const cookies = AuthModule.parseCookies(baseConfig.cookies, ['SAPISID']);
-      if (cookies.SAPISID) {
-        headers['Authorization'] = `SAPISIDHASH ${AuthModule.generateSapisidHash(cookies.SAPISID, baseConfig.origin)}`;
+      const auth = AuthModule.buildAuthHeaderFromConfig(baseConfig);
+      if (auth) {
+        headers['Authorization'] = auth;
       }
       headers['Cookie'] = baseConfig.cookies;
     }
@@ -127,9 +127,9 @@ export class BatchBuilder {
     };
 
     if (baseConfig.cookies && baseConfig.origin) {
-      const cookies = AuthModule.parseCookies(baseConfig.cookies, ['SAPISID']);
-      if (cookies.SAPISID) {
-        headers['Authorization'] = `SAPISIDHASH ${AuthModule.generateSapisidHash(cookies.SAPISID, baseConfig.origin)}`;
+      const auth = AuthModule.buildAuthHeaderFromConfig(baseConfig);
+      if (auth) {
+        headers['Authorization'] = auth;
       }
       headers['Cookie'] = baseConfig.cookies;
     }

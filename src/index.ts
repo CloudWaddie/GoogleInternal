@@ -34,5 +34,21 @@ export { BatchBuilder } from './batch/builder';
 export { PartialBatchError } from './errors';
 export { FieldMaskTree } from './utils/field-mask';
 export { calculateChecksum, fnv1a32, stableStringify } from './utils/checksum';
+export {
+  computeSha1,
+  computeVersionInfoDigest,
+  createAuthHeaderValueForFirstParty,
+  getFirstPartyAuthToken,
+  getFirstPartyAuthTokenWithTimestamp,
+  getOrigin,
+} from './auth/tokencrafter';
+export type { UserIdentifier } from './auth/tokencrafter';
+export {
+  buildAuthHeaderFromConfig,
+  buildSapisidAuthorizationHeader,
+  generateSapisidHash,
+  generateSapisidHashWithTimestamp,
+} from './auth/hashing';
+export type { SapisidAuthCookies, SapisidAuthHeaderOptions } from './auth/hashing';
 export { scrapeRpcMappings } from './scraper';
 export type { ScrapeResult, ScrapeProgress } from './scraper';

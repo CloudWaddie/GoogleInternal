@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { UserIdentifier } from '../auth/tokencrafter';
 
 export interface ServiceConfig {
   baseUrl: string;
@@ -9,6 +10,19 @@ export interface ServiceConfig {
   at?: string;
   cookies?: string;
   origin?: string;
+  /**
+   * FPA v2 user identifiers embedded in the SAPISIDHASH hash (e/u/a).
+   * - 'e': user's email address
+   * - 'u': focus-obfuscated Gaia ID
+   * - 'a': Workspace (dasher) app domain
+   * Required by some *.clients6.google.com / *.googleapis.com APIs such as
+   * drivefrontend-pa. Omit (or pass []) for the classic timestamp_hash token.
+   */
+  authUserIdentifiers?: UserIdentifier[] | null;
+  /** Additional FPA hash input fields appended after origin. */
+  authExtraFields?: string[];
+  /** Override Unix-seconds timestamp (mainly for tests). Defaults to now. */
+  authTimestamp?: number;
   
   // New options
   maxRetries?: number;

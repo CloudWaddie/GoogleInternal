@@ -102,9 +102,9 @@ export class Service {
     }
 
     if (this.config.cookies && this.config.origin) {
-      const cookies = AuthModule.parseCookies(this.config.cookies, ['SAPISID']);
-      if (cookies.SAPISID) {
-        headers['Authorization'] = `SAPISIDHASH ${AuthModule.generateSapisidHash(cookies.SAPISID, this.config.origin)}`;
+      const auth = AuthModule.buildAuthHeaderFromConfig(this.config);
+      if (auth) {
+        headers['Authorization'] = auth;
       }
       headers['Cookie'] = this.config.cookies;
     }
@@ -164,9 +164,9 @@ export class Service {
     };
 
     if (this.config.cookies && this.config.origin) {
-      const cookies = AuthModule.parseCookies(this.config.cookies, ['SAPISID']);
-      if (cookies.SAPISID) {
-        headers['Authorization'] = `SAPISIDHASH ${AuthModule.generateSapisidHash(cookies.SAPISID, this.config.origin)}`;
+      const auth = AuthModule.buildAuthHeaderFromConfig(this.config);
+      if (auth) {
+        headers['Authorization'] = auth;
       }
       headers['Cookie'] = this.config.cookies;
     }
