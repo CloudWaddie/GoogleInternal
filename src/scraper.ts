@@ -9,7 +9,9 @@ import { Agent, fetch as undiciFetch } from 'undici';
 
 const CONCURRENCY_LIMIT = 60;
 const FETCH_TIMEOUT = 15000;
-const EXTRACT_WORKERS = Math.min(8, Math.max(2, os.cpus().length - 2));
+// Short-lived batch job — use every core (previously reserved two, which
+// halved throughput on 4-core CI runners and typical dev boxes).
+const EXTRACT_WORKERS = Math.min(16, Math.max(2, os.cpus().length));
 
 // Google serves the Gemini/Bard app pages with very large response
 // headers (nonces, cookies, etc.) that exceed undici's default 16KB
@@ -51,6 +53,71 @@ async function fetchContent(url: string): Promise<string | null> {
     }
   } catch (e) {
     console.error(`[FETCH ERROR] ${url}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  return null;
+}
+
+/**
+ * Legacy diagnostic: locate the classic RPC registration class
+ * (`_.X = class { getName(); getResponse(); matches(); constructor(a,b,c) }`).
+ * Only invoked when the class-agnostic scan finds nothing — it re-parses
+ * every chunk that mentions getName/getResponse, which is pure overhead
+ * on modern bundles where the class-agnostic scan always succeeds.
+ */
+function probeClassicRpcClass(scriptContents: string[]): string | null {
+  for (let i = 0; i < scriptContents.length; i++) {
+    const content = scriptContents[i];
+    if (!content.includes('getName') || !content.includes('getResponse')) continue;
+
+    try {
+      const ast = parseScript(content, { next: true });
+      let found: string | null = null;
+      estraverse.traverse(ast as any, {
+        enter: (node: any) => {
+          let className: string | null = null;
+          let classBody: any = null;
+
+          if (node.type === 'AssignmentExpression' &&
+            node.left.type === 'MemberExpression' &&
+            node.left.object.name === '_' &&
+            node.right.type === 'ClassExpression') {
+            className = node.left.property.name;
+            classBody = node.right.body.body;
+          }
+          else if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier' && node.init && node.init.type === 'ClassExpression') {
+            className = node.id.name;
+            classBody = node.init.body.body;
+          }
+          else if (node.type === 'ClassDeclaration' && node.id) {
+            className = node.id.name;
+            classBody = node.body.body;
+          }
+
+          if (className && classBody) {
+            const methodNames = classBody
+              .filter((m: any) => m.type === 'MethodDefinition')
+              .map((m: any) => m.key.name || (m.key.type === 'Literal' ? m.key.value : null))
+              .filter(Boolean);
+
+            const hasRequiredMethods = ['getName', 'getInstance', 'getResponse', 'matches'].every(name =>
+              methodNames.includes(name)
+            );
+
+            if (hasRequiredMethods) {
+              const ctor = classBody.find((m: any) => m.kind === 'constructor');
+              if (ctor && ctor.value.params.length === 3) {
+                found = className;
+                console.log(`[FOUND] RPC Class Candidate: _.${found} (in chunk ${i})`);
+                return estraverse.VisitorOption.Break;
+              }
+            }
+          }
+        }
+      });
+      if (found) return found;
+    } catch (e) {
+      // Skip malformed
+    }
   }
   return null;
 }
@@ -129,73 +196,24 @@ export async function scrapeRpcMappings(
     console.log(`[STEP] Successfully loaded ${scriptContents.length} total script chunks.`);
   }
 
-  let rpcClassProp: string | null = null;
   const mappings = new Map<string, string>();
 
-  // Phase 1 (best-effort): classic RPC registration class discovery.
-  for (let i = 0; i < scriptContents.length; i++) {
-    const content = scriptContents[i];
-    if (!content.includes('getName') || !content.includes('getResponse')) continue;
-
-    try {
-      const ast = parseScript(content, { next: true });
-      estraverse.traverse(ast as any, {
-        enter: (node: any) => {
-          let className: string | null = null;
-          let classBody: any = null;
-
-          if (node.type === 'AssignmentExpression' &&
-            node.left.type === 'MemberExpression' &&
-            node.left.object.name === '_' &&
-            node.right.type === 'ClassExpression') {
-            className = node.left.property.name;
-            classBody = node.right.body.body;
-          }
-          else if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier' && node.init && node.init.type === 'ClassExpression') {
-            className = node.id.name;
-            classBody = node.init.body.body;
-          }
-          else if (node.type === 'ClassDeclaration' && node.id) {
-            className = node.id.name;
-            classBody = node.body.body;
-          }
-
-          if (className && classBody) {
-            const methodNames = classBody
-              .filter((m: any) => m.type === 'MethodDefinition')
-              .map((m: any) => m.key.name || (m.key.type === 'Literal' ? m.key.value : null))
-              .filter(Boolean);
-
-            const hasRequiredMethods = ['getName', 'getInstance', 'getResponse', 'matches'].every(name =>
-              methodNames.includes(name)
-            );
-
-            if (hasRequiredMethods) {
-              const ctor = classBody.find((m: any) => m.kind === 'constructor');
-              if (ctor && ctor.value.params.length === 3) {
-                rpcClassProp = className;
-                console.log(`[FOUND] RPC Class Candidate: _.${rpcClassProp} (in chunk ${i})`);
-                return estraverse.VisitorOption.Break;
-              }
-            }
-          }
-        }
-      });
-      if (rpcClassProp) break;
-    } catch (e) {
-      // Skip malformed
-    }
-  }
-
-  if (!rpcClassProp) {
-    console.warn('[WARN] Could not find classic RPC registration class — falling back to generic scan.');
-  }
-
   // Phase 2: class-agnostic extraction via a worker pool. Matches any
-  // `new _.<Class>(...)` whose arguments contain a "/Service.Method" literal.
+  // `new _.<Class>(...)` whose arguments contain a "/Service.Method" literal
+  // plus object-style config registrations; handles both classic and 2026+
+  // bundle shapes, so the legacy classic-class probe (Phase 1) only runs as
+  // a diagnostic fallback when this yields nothing.
   console.log(`\n[PHASE 2] Extracting RPC mappings (generic class-agnostic scan, ${EXTRACT_WORKERS} workers)...`);
   const astBar = multibar ? multibar.create(scriptContents.length, 0, { task: 'Extracting RPCs', foundStr: '| Mappings: 0' }) : null;
-  const chunksToScan = scriptContents.filter(c => c.includes('new _.'));
+  // Cheap string pre-filters before the expensive AST parse:
+  // - registrations always flow through `new _.<Class>(...)`
+  // - every recorded entry needs a "/Service.Method"-style string literal,
+  //   so chunks without one cannot produce mappings and are skipped.
+  // Mirrors the extractor's path semantics exactly (quoted string whose first
+  // char is "/" and which contains "." anywhere — covers "/Svc.Method" and
+  // "/pkg.Svc/Method" shapes). A chunk failing this cannot produce any entry.
+  const HAS_PATH_LITERAL_RE = /["'`]\/[^"'`]*\.[^"'`]*["'`]/;
+  const chunksToScan = scriptContents.filter(c => c.includes('new _.') && HAS_PATH_LITERAL_RE.test(c));
 
   const workerFile = path.join(__dirname, 'scraper-worker.js');
   // In ts-node dev mode the compiled .js doesn't exist — use the .ts source
@@ -275,6 +293,14 @@ export async function scrapeRpcMappings(
 
   if (astBar) astBar.update(chunksToScan.length, { foundStr: `| Mappings: ${mappings.size}` });
   if (multibar) multibar.stop();
+
+  // Legacy-format diagnostic — only burn cycles on it when the
+  // class-agnostic scan came up empty (i.e. an old-style bundle).
+  let rpcClassProp: string | null = null;
+  if (mappings.size === 0) {
+    console.warn('[WARN] Class-agnostic scan found no mappings — probing for classic RPC registration class...');
+    rpcClassProp = probeClassicRpcClass(scriptContents);
+  }
 
   const elapsedMs = Date.now() - started;
   console.log('\n' + '='.repeat(50));
