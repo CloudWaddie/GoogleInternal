@@ -210,6 +210,10 @@ export async function scrapeRpcMappings(
   const numWorkers = Math.max(1, Math.min(EXTRACT_WORKERS, chunksToScan.length));
   let nextIndex = 0;
   let processedCount = 0;
+  // Running tally of raw matches (pre-dedup) so progress reporting shows
+  // live numbers — the deduped `mappings` map is only built after the
+  // pool finishes.
+  let rawMatches = 0;
 
   const runWorker = (): Promise<void> =>
     new Promise((resolve, reject) => {
@@ -218,12 +222,13 @@ export async function scrapeRpcMappings(
         if (msg.type === 'result') {
           workerResults[msg.index] = { entries: msg.entries, classTypes: msg.classTypes };
           processedCount++;
+          rawMatches += msg.entries?.length ?? 0;
           if (astBar) {
-            astBar.update(processedCount, { foundStr: `| Mappings: ${mappings.size}` });
+            astBar.update(processedCount, { foundStr: `| Mappings: ${rawMatches}` });
           } else if (processedCount % 50 === 0 || processedCount === chunksToScan.length) {
-            console.log(`[PROGRESS] Scanned chunk ${processedCount}/${chunksToScan.length} | Found: ${mappings.size}`);
+            console.log(`[PROGRESS] Scanned chunk ${processedCount}/${chunksToScan.length} | Found: ${rawMatches}`);
           }
-          onProgress?.({ modulesCompleted: modules.length, modulesTotal: modules.length, chunksExtracted: processedCount, chunksTotal: chunksToScan.length, mappingsFound: mappings.size });
+          onProgress?.({ modulesCompleted: modules.length, modulesTotal: modules.length, chunksExtracted: processedCount, chunksTotal: chunksToScan.length, mappingsFound: rawMatches });
         } else if (msg.type === 'done') {
           worker.terminate();
           resolve();
