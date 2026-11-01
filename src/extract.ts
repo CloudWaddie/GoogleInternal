@@ -35,6 +35,47 @@ export function findRpcPath(nodes: any[]): string | null {
   return null;
 }
 
+/** A string that looks like a batchexecute rpcid (e.g. "KqZy6d", "SO745e"). */
+const RPCID_RE = /^[A-Za-z][A-Za-z0-9_]{3,15}$/;
+
+/**
+ * Recursively collect string literals reachable inside an AST node.
+ * Handles plain literals, single-quasi template literals, conditional
+ * expressions (`cond ? "/Svc.Method" : void 0`), arrays, nested objects
+ * and parenthesized expressions. Property KEYS are not collected — only
+ * values — so obfuscated object shapes don't pollute the result.
+ */
+export function collectStrings(node: any, acc: string[] = []): string[] {
+  if (!node) return acc;
+  switch (node.type) {
+    case 'Literal':
+      if (typeof node.value === 'string') acc.push(node.value);
+      break;
+    case 'TemplateLiteral':
+      if (node.quasis?.length === 1 && typeof node.quasis[0].value?.cooked === 'string') {
+        acc.push(node.quasis[0].value.cooked);
+      }
+      break;
+    case 'ConditionalExpression':
+      collectStrings(node.consequent, acc);
+      collectStrings(node.alternate, acc);
+      break;
+    case 'ArrayExpression':
+      for (const el of node.elements) collectStrings(el, acc);
+      break;
+    case 'ObjectExpression':
+      for (const p of node.properties) {
+        if (p.type === 'Property') collectStrings(p.value, acc);
+        else if (p.type === 'SpreadElement') collectStrings(p.argument, acc);
+      }
+      break;
+    case 'ParenthesizedExpression':
+      collectStrings(node.expression, acc);
+      break;
+  }
+  return acc;
+}
+
 /** Registration-class call types, e.g. _.yD = "unary", _.eK = "server_streaming". */
 const RPC_TYPE_RE = /unary|streaming|bidi/i;
 
@@ -73,6 +114,13 @@ export interface ChunkExtraction {
  * Class-agnostic RPC extraction from a single script chunk.
  * Matches any `new _.<Class>(...)` whose arguments contain a
  * "/Service.Method" literal; the rpcid is the first string argument.
+ * Also matches the 2026+ object-registration shape, where the config
+ * object is built separately from its `new` call:
+ * `var o = { Ub:"SO745e", Wb:_.nz ? "/Svc.Method" : void 0, ...,
+ *            Vb:class{...}, Yb:class{...} }; o[_.Xk] = !0; new _.rz(o);`
+ * — matched shape-based (any object literal carrying BOTH a service path
+ * and an rpcid-looking string), since the property names are obfuscated
+ * and rotate between builds.
  * Also collects registration-class call types (unary / server_streaming / ...).
  */
 export function extractMappingsFromChunk(content: string): ChunkExtraction {
@@ -96,7 +144,23 @@ export function extractMappingsFromChunk(content: string): ChunkExtraction {
           }
           return;
         }
-        // 2. Registration class defs: `_.yD = class extends _.MPb { ... }`
+        // 2. Object-style registrations: an object literal that carries both a
+        //    "/Service.Method" path and an rpcid-looking string. This covers the
+        //    2026+ config-object registration (`new _.rz({Ub:.., Wb:..})` and its
+        //    build-separately variant) without relying on obfuscated key names.
+        if (node.type === 'ObjectExpression') {
+          const strings = collectStrings(node);
+          const path = strings.find(s => s.startsWith('/') && s.includes('.'));
+          if (!path) return;
+          const rpcId = strings.find(s => !s.startsWith('/') && RPCID_RE.test(s));
+          if (rpcId) {
+            entries.push([rpcId, path.substring(1), null]);
+            // Already matched this object — don't descend (avoids duplicate
+            // entries from nested literals).
+            return estraverse.VisitorOption.Skip;
+          }
+        }
+        // 3. Registration class defs: `_.yD = class extends _.MPb { ... }`
         if (node.type === 'AssignmentExpression' &&
             node.left?.type === 'MemberExpression' &&
             node.left.object?.name === '_' &&
