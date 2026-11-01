@@ -116,42 +116,38 @@ export class StreamingDecoder {
 
     const results: { rpcId: string; payload: any; index: string }[] = [];
 
-    // Step 2: Line-based parsing from buffer
+    // Step 2: Length-driven parsing from buffer. Each chunk is a decimal
+    // length line followed by exactly `length` characters of JSON. A
+    // trailing newline after the JSON is optional (stream end may cut
+    // right after the payload), so we slice by length instead of waiting
+    // for a second newline.
     while (true) {
       const nextNewline = this.buffer.indexOf('\n');
       if (nextNewline === -1) break;
 
       const line = this.buffer.substring(0, nextNewline).trim();
-      const nextNextNewline = this.buffer.indexOf('\n', nextNewline + 1);
-      
-      if (nextNextNewline === -1) {
-        // We have one line, but we need the second line for the JSON
-        // Check if the current line is a length
-        if (/^\d+$/.test(line)) {
-           // It's a length, wait for next line
-           break;
-        } else {
-           // It's not a length, skip it
-           this.buffer = this.buffer.substring(nextNewline + 1);
-           continue;
-        }
-      }
 
       if (/^\d+$/.test(line)) {
-        const jsonLine = this.buffer.substring(nextNewline + 1, nextNextNewline).trim();
-        if (jsonLine) {
+        const length = parseInt(line, 10);
+        const payloadStart = nextNewline + 1;
+        if (Number.isFinite(length) && length > 0) {
+          // Wait until the full payload (length chars) is buffered.
+          if (this.buffer.length - payloadStart < length) break;
+
+          const jsonChunk = this.buffer.substring(payloadStart, payloadStart + length).trim();
           try {
-            const chunk = JSON.parse(jsonLine);
+            const chunk = JSON.parse(jsonChunk);
             extractWrbEnvelopes(chunk, results);
-            this.buffer = this.buffer.substring(nextNextNewline + 1);
+            this.buffer = this.buffer.substring(payloadStart + length);
           } catch (e) {
-            // Not valid JSON, maybe the length was wrong?
-            // Skip the length line and continue
+            // Length didn't lead to valid JSON — treat the line as data and
+            // advance past it so a later valid chunk can still parse.
             this.buffer = this.buffer.substring(nextNewline + 1);
           }
-        } else {
-           this.buffer = this.buffer.substring(nextNewline + 1);
+          continue;
         }
+        // Zero/invalid length — skip the line.
+        this.buffer = this.buffer.substring(nextNewline + 1);
       } else {
         // Not a length line, skip it
         this.buffer = this.buffer.substring(nextNewline + 1);

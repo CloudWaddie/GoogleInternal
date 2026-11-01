@@ -93,7 +93,7 @@ export class Service {
     const body = Transport.encodeBatch([{ rpcId: spec.rpcId, args }]);
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
       ...this.config.headers, // User custom headers (e.g. x-goog-ext-)
     };
 
@@ -160,7 +160,7 @@ export class Service {
     const body = Transport.encodeBatch([{ rpcId: spec.rpcId, args }]);
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8',
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
     };
 
     if (this.config.cookies && this.config.origin) {

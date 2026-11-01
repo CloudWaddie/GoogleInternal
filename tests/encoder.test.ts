@@ -9,10 +9,11 @@ describe('encoder', () => {
     
     const result = encodeBatch(calls);
     
+    // Modern batchexecute: [[[rpcId, argsJson, null, "generic"]]]
     const expectedPayload = [
-      ["rpc1", JSON.stringify(['arg1', 2, { key: 'value' }]), null, "1"]
+      ["rpc1", JSON.stringify(['arg1', 2, { key: 'value' }]), null, "generic"]
     ];
-    const expected = JSON.stringify([[expectedPayload]]);
+    const expected = JSON.stringify([expectedPayload]);
     
     expect(result).toBe(expected);
   });
@@ -26,10 +27,10 @@ describe('encoder', () => {
     const result = encodeBatch(calls);
     
     const expectedPayload = [
-      ["rpc1", JSON.stringify(['arg1']), null, "1"],
-      ["rpc2", JSON.stringify(['arg2', 'extra']), null, "2"]
+      ["rpc1", JSON.stringify(['arg1']), null, "generic"],
+      ["rpc2", JSON.stringify(['arg2', 'extra']), null, "generic"]
     ];
-    const expected = JSON.stringify([[expectedPayload]]);
+    const expected = JSON.stringify([expectedPayload]);
     
     expect(result).toBe(expected);
   });
